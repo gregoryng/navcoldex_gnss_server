@@ -10,6 +10,7 @@ import logging
 import argparse
 import socket
 import time
+import threading
 
 import possim
 
@@ -23,26 +24,33 @@ interval = 1.0
 
 
 
-def old():
-    psim = possim.PosSimulator()
+def server(ns, lock):
 
+    do_listen = True
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.bind((HOST, PORT))
-        s.listen()
-        conn, addr = s.accept()
-        with conn:
-            print(f"Connected by {addr}")
+        while do_listen:
+            s.listen()
+            conn, addr = s.accept()
+            with conn:
+                print(f"Connected by {addr}")
+                try:
+                    while True:
+                        try:
+                            lock.acquire()
+                            data = ns.nav_message()
+                        finally:
+                            lock.release()
 
-            while True:
-                psim.move(1.0)
-                data = psim.navstate().nav_message().encode('UTF-8')
-                #print(data)
-                conn.sendall(data)
+                        conn.sendall(data.encode('UTF-8'))
+                        time.sleep(1.0)
+                    do_listen = False
+                except BrokenPipeError:
+                    print("Client disconnected. Waiting for connection")
+                    do_listen = True
 
-                time.sleep(1.0)
 
-
-def serial_handler(ns, lock, quit):
+def serial_handler(ns, lock):
     """ Placeholder for serial handler thread """
     psim = possim.PosSimulator()
     while True:
@@ -61,8 +69,8 @@ def main():
     ns = nav.NavState()
     lock = threading.Lock()
     t_serial = threading.Thread(target=serial_handler, args=(ns, lock))
-
-
+    t_serial.start()
+    server(ns, lock)
     
 
     pass
