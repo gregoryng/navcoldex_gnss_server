@@ -38,8 +38,12 @@ class NavState:
 
     def update(self, other):
         """ Update the member variables of this variable from other """
-        for k, v in other.__dict__.items():
-            setattr(self, k, v)
+        if isinstance(other, dict):
+            for k, v in other.items():
+                setattr(self, k, v)
+        else:
+            for k, v in other.__dict__.items():
+                setattr(self, k, v)
 
     #def set_time(self, 
 

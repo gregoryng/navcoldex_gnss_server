@@ -46,6 +46,10 @@ class PosSimulator:
             trk_gnd=self.heading, hor_spd=self.hspeed, vert_spd=self.vspeed)
         return ns
 
+
+
+
+
 def main():
     psim = PosSimulator(heading=45.)
 

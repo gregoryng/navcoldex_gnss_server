@@ -15,6 +15,7 @@ import threading
 import possim
 
 import nav
+import nav_nmea
 
 HOST = "127.0.0.1"  # Standard loopback interface address (localhost)
 PORT = 4040  # Port to listen on (non-privileged ports are > 1023)
@@ -50,7 +51,7 @@ def server(ns, lock):
                     do_listen = True
 
 
-def serial_handler(ns, lock):
+def simulator_handler(ns, lock):
     """ Placeholder for serial handler thread """
     psim = possim.PosSimulator()
     while True:
@@ -63,17 +64,29 @@ def serial_handler(ns, lock):
         finally:
             lock.release()
 
+def nmea_stdin_handler(ns, lock):
+    """ To use this one with a simulator, run:
+    ./utils/gen_nmea.py | ./server.py
+    """
+    ns2 = nav_nmea.NmeaNavState()
+    for line in sys.stdin:
+        ns2.update_nmea(line)
+        try:
+            lock.acquire()
+            ns.update(ns2)
+        finally:
+            lock.release()
+
 
 def main():
     #https://docs.python.org/3/library/threading.html#timer-objects
     ns = nav.NavState()
     lock = threading.Lock()
-    t_serial = threading.Thread(target=serial_handler, args=(ns, lock))
+    #t_serial = threading.Thread(target=simulator_handler, args=(ns, lock))
+    t_serial = threading.Thread(target=nmea_stdin_handler, args=(ns, lock))
     t_serial.start()
     server(ns, lock)
-    
 
-    pass
 
 if __name__ == "__main__":
     main()

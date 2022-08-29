@@ -1,0 +1,8 @@
+pynmea2
+
+# For position simulator only
+pymap3d
+
+# for nmea simulator only
+nmeasim
+geographiclib
