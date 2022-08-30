@@ -1,4 +1,5 @@
 pynmea2
+pyserial
 
 # For position simulator only
 pymap3d

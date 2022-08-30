@@ -8,6 +8,7 @@ Usage:
 """
 
 import sys
+
 import pynmea2
 
 import nav
@@ -45,7 +46,7 @@ class NmeaNavState(nav.NavState):
         return {
             'utc_hour': timestamp.hour,
             'utc_min': timestamp.minute,
-            'utc_sec': timestamp.second
+            'utc_ms': timestamp.second*1000
         }
 
     def update_GGA(self, msg):

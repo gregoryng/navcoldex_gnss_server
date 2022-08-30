@@ -12,24 +12,32 @@ import socket
 import time
 import threading
 
+# For serial
+import io
+import pynmea2
+import serial
+
+
 import possim
 
 import nav
 import nav_nmea
 
-HOST = "127.0.0.1"  # Standard loopback interface address (localhost)
-PORT = 4040  # Port to listen on (non-privileged ports are > 1023)
-
-# Message output interval
-interval = 1.0
 
 
 
-def server(ns, lock):
+
+def server(ns, lock, host, port, interval=1.0):
+    """ interval - Message output interval
+
+    This routine currently only accepts one connection at a time,
+    but we could easily make it accept multiple connections
+    """
 
     do_listen = True
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.bind((HOST, PORT))
+        logging.info("Listening on %s:%d", host, port)
+        s.bind((host, port))
         while do_listen:
             s.listen()
             conn, addr = s.accept()
@@ -44,14 +52,14 @@ def server(ns, lock):
                             lock.release()
 
                         conn.sendall(data.encode('UTF-8'))
-                        time.sleep(1.0)
+                        time.sleep(interval)
                     do_listen = False
                 except BrokenPipeError:
                     print("Client disconnected. Waiting for connection")
                     do_listen = True
 
 
-def simulator_handler(ns, lock):
+def simulator_handler(ns, lock, *args):
     """ Placeholder for serial handler thread """
     psim = possim.PosSimulator()
     while True:
@@ -64,7 +72,7 @@ def simulator_handler(ns, lock):
         finally:
             lock.release()
 
-def nmea_stdin_handler(ns, lock):
+def nmea_stdin_handler(ns, lock, *args):
     """ To use this one with a simulator, run:
     ./utils/gen_nmea.py | ./server.py
     """
@@ -77,15 +85,61 @@ def nmea_stdin_handler(ns, lock):
         finally:
             lock.release()
 
+def nmea_serial_handler(ns, lock, *args):
+    """ To use this one with a simulator, run:
+    ./utils/gen_nmea.py | ./server.py
+    """
+
+    (serialport_name,) = args
+
+    ns2 = nav_nmea.NmeaNavState()
+
+
+    ser = serial.Serial(serialport_name, 9600, timeout=1.)
+    sio = io.TextIOWrapper(io.BufferedRWPair(ser, ser))
+
+    while True:
+        try:
+            line = sio.readline()
+            ns2.update_nmea(line)
+            try:
+                lock.acquire()
+                ns.update(ns2)
+            finally:
+                lock.release()
+        except serial.SerialException as e:
+            logging.error('Device error: %r', e)
+            break
+        except (pynmea2.ParseError, UnicodeDecodeError) as e:
+            logging.warning('Parse error: %s', e)
+            continue
+        except KeyboardInterrupt:
+            pass
+    logging.info("nmea_serial_handler stopped.")
 
 def main():
-    #https://docs.python.org/3/library/threading.html#timer-objects
+    parser = argparse.ArgumentParser(description="Serial-to-TCP server for GNSS receivers")
+
+    parser.add_argument('-s', '--serial', default="/dev/ttyUSB0",
+                                           help="Input serial port")
+
+    # HOST = "127.0.0.1"  # Standard loopback interface address (localhost)
+    # PORT = 4040  # Port to listen on (non-privileged ports are > 1023)
+    parser.add_argument('--host', default="localhost", help="TCP server listen hostname")
+    parser.add_argument('--port', default=4040, type=int, help="TCP server listen port")
+    parser.add_argument('--interval', default=1.0, type=float, help="Output position update interval (seconds)")
+    # parser.add_argument('-v','--verbose', action="store_true", help="Display verbose output")
+    args = parser.parse_args()
+
+    logging.basicConfig(level=logging.INFO, stream=sys.stdout)
+
+
     ns = nav.NavState()
-    lock = threading.Lock()
-    #t_serial = threading.Thread(target=simulator_handler, args=(ns, lock))
-    t_serial = threading.Thread(target=nmea_stdin_handler, args=(ns, lock))
+    lock = threading.Lock() # mutex for ns object
+    handler = nmea_serial_handler # or simulator_handler, nmea_stdin_handler
+    t_serial = threading.Thread(target=handler, args=(ns, lock, args.serial))
     t_serial.start()
-    server(ns, lock)
+    server(ns, lock, args.host, args.port, args.interval)
 
 
 if __name__ == "__main__":

@@ -1,9 +1,6 @@
 #!/usr/bin/env python3
 
-#import geo
-
 from dataclasses import dataclass
-
 
 @dataclass
 class NavState:
@@ -44,10 +41,6 @@ class NavState:
         else:
             for k, v in other.__dict__.items():
                 setattr(self, k, v)
-
-    #def set_time(self, 
-
-  #if (socket->state() == QAbstractSocket::ConnectedState) {
 
 if __name__ == "__main__":
     main()
