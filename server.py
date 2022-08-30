@@ -17,17 +17,12 @@ import io
 import pynmea2
 import serial
 
-
 import possim
-
 import nav
 import nav_nmea
 
 
-
-
-
-def server(ns, lock, host, port, interval=1.0):
+def server(ns, host, port, interval=1.0):
     """ interval - Message output interval
 
     This routine currently only accepts one connection at a time,
@@ -42,50 +37,37 @@ def server(ns, lock, host, port, interval=1.0):
             s.listen()
             conn, addr = s.accept()
             with conn:
-                print(f"Connected by {addr}")
+                logging.info(f"Connected by {addr}")
                 try:
                     while True:
-                        try:
-                            lock.acquire()
-                            data = ns.nav_message()
-                        finally:
-                            lock.release()
-
+                        data = ns.nav_message()
                         conn.sendall(data.encode('UTF-8'))
                         time.sleep(interval)
                     do_listen = False
                 except BrokenPipeError:
-                    print("Client disconnected. Waiting for connection")
+                    logging.info("Client disconnected. Waiting for connection")
                     do_listen = True
 
 
-def simulator_handler(ns, lock, *args):
+def simulator_handler(ns, *args):
     """ Placeholder for serial handler thread """
     psim = possim.PosSimulator()
     while True:
         time.sleep(0.2)
         psim.move(0.2)
         ns1 = psim.navstate()
-        try:
-            lock.acquire()
-            ns.update(ns1)
-        finally:
-            lock.release()
+        ns.update(ns1)
 
-def nmea_stdin_handler(ns, lock, *args):
+def nmea_stdin_handler(ns, *args):
     """ To use this one with a simulator, run:
     ./utils/gen_nmea.py | ./server.py
     """
     ns2 = nav_nmea.NmeaNavState()
     for line in sys.stdin:
         ns2.update_nmea(line)
-        try:
-            lock.acquire()
-            ns.update(ns2)
-        finally:
-            lock.release()
+        ns.update(ns2)
 
-def nmea_serial_handler(ns, lock, *args):
+def nmea_serial_handler(ns, *args):
     """ To use this one with a simulator, run:
     ./utils/gen_nmea.py | ./server.py
     """
@@ -94,7 +76,6 @@ def nmea_serial_handler(ns, lock, *args):
 
     ns2 = nav_nmea.NmeaNavState()
 
-
     ser = serial.Serial(serialport_name, 9600, timeout=1.)
     sio = io.TextIOWrapper(io.BufferedRWPair(ser, ser))
 
@@ -102,11 +83,7 @@ def nmea_serial_handler(ns, lock, *args):
         try:
             line = sio.readline()
             ns2.update_nmea(line)
-            try:
-                lock.acquire()
-                ns.update(ns2)
-            finally:
-                lock.release()
+            ns.update(ns2)
         except serial.SerialException as e:
             logging.error('Device error: %r', e)
             break
@@ -135,11 +112,10 @@ def main():
 
 
     ns = nav.NavState()
-    lock = threading.Lock() # mutex for ns object
     handler = nmea_serial_handler # or simulator_handler, nmea_stdin_handler
-    t_serial = threading.Thread(target=handler, args=(ns, lock, args.serial))
+    t_serial = threading.Thread(target=handler, args=(ns, args.serial))
     t_serial.start()
-    server(ns, lock, args.host, args.port, args.interval)
+    server(ns, args.host, args.port, args.interval)
 
 
 if __name__ == "__main__":
