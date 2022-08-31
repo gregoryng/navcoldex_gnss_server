@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 from dataclasses import dataclass
 
 import threading
@@ -42,24 +40,17 @@ class NavState:
         finally:
             self.lock_.release()
 
-        return self.formatstr % fields
+        return self.formatstr_ % fields
 
     def update(self, other):
-        """ Update the member variables of this variable from other """
+        """ Update the public member variables of this variable from other """
         self.lock_.acquire()
         try:
-            if isinstance(other, dict):
-                for k, v in other.items():
-                    if k.endswith('_'):
-                        continue
-                    setattr(self, k, v)
-            else:
-                for k, v in other.__dict__.items():
-                    if k.endswith('_'):
-                        continue
+            obj = other if isinstance(other, dict) else other.__dict__
+
+            for k, v in obj.items():
+                if not k.endswith('_'): # skip private members
                     setattr(self, k, v)
         finally:
             self.lock_.release()
 
-if __name__ == "__main__":
-    main()

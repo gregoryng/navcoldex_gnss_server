@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 
-# GPS server
-""" This script creates a data source that simulates output. 
+"""
+GPS data server -- reads serial input and serves on TCP port
+This script creates a data source that simulates output. 
 This can be modified to read current state from another source such as GPSD or
 a serial input """
 
@@ -67,12 +68,10 @@ def nmea_stdin_handler(ns, *args):
         ns2.update_nmea(line)
         ns.update(ns2)
 
-def nmea_serial_handler(ns, *args):
+def nmea_serial_handler(ns, serialport_name, *args):
     """ To use this one with a simulator, run:
     ./utils/gen_nmea.py | ./server.py
     """
-
-    (serialport_name,) = args
 
     ns2 = nav_nmea.NmeaNavState()
 

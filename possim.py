@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 
 # Geographic calculation library
-#import pymap3d as pm
-
 import pymap3d.vincenty as pmv
 
 import nav
@@ -48,15 +46,10 @@ class PosSimulator:
 
 
 
-
-
 def main():
     psim = PosSimulator(heading=45.)
-
-
     for ii in range(100):
         psim.move(1)
-
         print(psim.time, psim.lat, psim.lon, psim.alt)
 
 
