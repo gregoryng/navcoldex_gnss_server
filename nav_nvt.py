@@ -2,6 +2,7 @@
 
 """
 Navigation adapter for Novatel binary message stream
+TODO: convert GPS time to UTC time
 """
 
 import time
@@ -24,7 +25,7 @@ def gm_from_gps(gps_secs):
     gm_time = time.gmtime(gps_secs + 329097600)
     return gm_time
 
-def nvt_nav_gen(stream, nmax=None):
+def nvt_nav_gen(stream, gps_utc_offset, nmax=None):
     """ Generate NavState values from a stream of novatel messages """
     stats = defaultdict(int)
     ns = nav.NavState()
@@ -38,18 +39,18 @@ def nvt_nav_gen(stream, nmax=None):
 
         data = {}
         if rec.header.msgid == 263: # INSATT
-            data = parse_time(rec.parsed)
+            data = parse_time(rec.parsed.gnssweek, rec.parsed.gnsssec, gps_utc_offset)
         elif rec.header.msgid in (42, 423): # BESTPOS, BESTGPSPOS
             data = parse_time(rec.parsed)
             for k1, k2 in (('lat', 'latitude'), ('lon', 'longitude'), ('hgt', 'height')):
                 data[k2] = getattr(rec.parsed, k1)
         elif rec.header.msgid in (99, 506): # BESTVEL, BESTGPSVEL
-            data = parse_time(rec.parsed)
+            data = parse_time(rec.parsed.gnssweek, rec.parsed.gnsssec, gps_utc_offset)
             # vel_type latency age hor_spd trk_gnd vert_spd resvd1 crc
             for k1 in 'hor_spd trk_gnd vert_spd'.split():
                 data[k1] = getattr(rec.parsed, k1)
         elif rec.header.msgid in (507, 508): # INSPVA, INSPVAS
-            data = parse_time(rec.parsed)
+            data = parse_time(rec.parsed.gnssweek, rec.parsed.gnsssec, gps_utc_offset)
             for k1, k2 in (('lat', 'latitude'), ('lon', 'longitude'), ('hgt', 'height'),
                 ('vu', 'vert_spd') ):
                 data[k2] = getattr(rec.parsed, k1)
@@ -65,9 +66,9 @@ def nvt_nav_gen(stream, nmax=None):
         if nmax is not None and i >= nmax:
             break
 
-def parse_time(parsed):
+def utc_time(gnssweek, gnsssec, gps_utc_offset_sec=0.):
     data = {}
-    gpstime = gm_from_gps(sec_from_weeksec(parsed.gnssweek, parsed.gnsssec))
+    gpstime = gm_from_gps(sec_from_weeksec(gnssweek, gnsssec) - gps_utc_offset_sec)
     for k1, k2 in (
         ('tm_year', 'utc_year'),
         ('tm_mon', 'utc_month'),
@@ -77,7 +78,7 @@ def parse_time(parsed):
 
         data[k2] = getattr(gpstime, k1)
 
-        data['utc_ms'] = int((parsed.gnsssec % 60.) * 1000)
+        data['utc_ms'] = int((gnsssec % 60.) * 1000)
     return data
 
 

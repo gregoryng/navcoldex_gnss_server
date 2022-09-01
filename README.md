@@ -9,8 +9,7 @@ This utility currently only supports NMEA input, but support for Novatel
 binary format messages and Javad/Topcon TPS/JPS format binary messages
 are also planned.
 
-Required nmea messages are GGA and RMC.  ZDA is also recommended.
-Currently, with NMEA input, vertical speed is not supported.
+See below for recommended messages for each input format.
 
 
 
@@ -37,6 +36,12 @@ and update interval, if needed:
 ./server.py --serial /dev/ttyUSB0 --host 192.168.1.54 --port 4040 --interval 0.5
 ```
 
+Select the input data format using the `--format` flag:
+
+```
+./server.py --format nvt
+```
+
 Once the server is running, you can use netcat to check the output.  In another
 terminal window, run:
 
@@ -59,14 +64,18 @@ speed over ground, and vertical speed.
 
 ## Recommended Messages
 
-For NMEA input, GGA, RMC, and ZDA message are recommended.
+For NMEA input, GGA, RMC, and ZDA message are recommended.  In NMEA input mode,
+vertical speed is not currently supported.
+
 
 For NOVATEL input, messages that provide position and velocity are recommended.
-The following combinations would work:
+Either of the following two combinations would work:
 
 - (BESTPOS or BESTGPSPOS) and (BESTVEL or BESTGPSVEL)
 - INSPVA or INSPVAS
 
+
+For JAVAD input, `GT`, `PG`, and `VG` messages are recommended.
 
 # References
 

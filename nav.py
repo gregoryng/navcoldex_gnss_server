@@ -5,9 +5,9 @@ import datetime
 @dataclass
 class NavState:
     """ Navigation state in SI units """
-    utc_year: int=0
-    utc_month: int=0
-    utc_day: int=0
+    utc_year: int=1980
+    utc_month: int=1
+    utc_day: int=1
     utc_hour: int=0
     utc_min: int=0
     utc_ms: int=0

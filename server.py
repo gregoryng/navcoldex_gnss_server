@@ -16,12 +16,13 @@ import threading
 # For serial
 import io
 import pynmea2
-#import serial
+import serial
 
 import possim
 import nav
 import nav_nmea
 import nav_nvt
+import nav_jvd
 
 def server(ns, host, port, interval=1.0):
     """ interval - Message output interval
@@ -50,8 +51,29 @@ def server(ns, host, port, interval=1.0):
                     do_listen = True
 
 
+class StreamDelayer:
+    """ When reading messages from a stream, delay them until appropriate time
+    for their internal timestamps """
+    def __init__(self):
+        self.t0 = None
+
+    def update(self, msgtime, delay=True, now=None):
+        if now is None:
+            now = time.time()
+
+        if self.t0 is None:
+            self.t0 = (now, msgtime) # Initial message
+            return 0.
+
+        rtime = now - self.t0[0]
+        rtime_msg = (msgtime - self.t0[1]).total_seconds()
+        dt = max(0., rtime_msg - rtime)
+        if delay:
+            time.sleep(dt)
+        return dt
+
 def simulator_handler(ns, *args):
-    """ Placeholder for serial handler thread """
+    """ Placeholder for serial handler thread, just simulates movement """
     psim = possim.PosSimulator()
     while True:
         time.sleep(0.2)
@@ -68,36 +90,59 @@ def nmea_stdin_handler(ns, *args):
         ns2.update_nmea(line)
         ns.update(ns2)
 
-def nvt_serial_handler(ns, serialport_name, *args):
-
-    ns2 = nav_nmea.NmeaNavState()
-
+def nvt_serial_handler(ns, serialport_name, utcoffset, *args):
+    ns = nav.NavState()
     ser = serial.Serial(serialport_name, 38400, timeout=1.)
     #sio = io.TextIOWrapper(io.BufferedRWPair(ser, ser))
-
-    for ns2 in nav_nvt.nvt_nav_gen(ser):
+    for ns2 in nav_nvt.nvt_nav_gen(ser, utcoffset):
         try:
             ns.update(ns2)
         except KeyboardInterrupt:
             break
 
-def nvt_sim_handler(ns, serialport_name, *args):
+def jvd_serial_handler(ns, serialport_name, utcoffset, gpsweekoffset, *args):
+    ns = nav.NavState()
+    ser = serial.Serial(serialport_name, 38400, timeout=1.)
+    #sio = io.TextIOWrapper(io.BufferedRWPair(ser, ser))
+    for ns2 in nav_jvd.greis_nav_gen(ser, utcoffset, gpsweekoffset):
+        try:
+            dtobj = ns2.datetime()
+            if dtobj.year == 1980:
+                continue
+            ns.update(ns2)
+        except KeyboardInterrupt:
+            break
+
+
+
+def nvt_sim_handler(ns, _, utcoffset, *args):
     infile = "/disk/kea/WAIS/targ/xped/ICP9/breakout/ELSA/F03/TOT3/JKB2s/X07a/AVNnp1/bxds"
-    ns2 = nav_nmea.NmeaNavState()
+    ns2 = nav.NavState()
+    sdelay = StreamDelayer()
     t0 = None
     with open(infile, "rb") as fin:
         try:
-            for ns2 in nav_nvt.nvt_nav_gen(fin):
+            for ns2 in nav_nvt.nvt_nav_gen(fin, utcoffset):
                 # Delay until appropriate time to issue message
-                t1 = time.time()
-                if t0 is None:
-                    t0 = (t1, ns2.datetime()) # Initial message
-                else:
-                    rtime = t1 - t0[0]
-                    rtime_msg = (ns2.datetime() - t0[1]).total_seconds()
-                    dt = rtime_msg - rtime
-                    if dt > 0:
-                        time.sleep(dt)
+                sdelay.update(msgtime=ns2.datetime())
+                print(ns2.nav_message().strip())
+                ns.update(ns2)
+
+        except KeyboardInterrupt:
+            pass
+
+def jvd_sim_handler(ns, _, utcoffset, weekoffset, *args):
+    infile = "/disk/kea/WAIS/targ/xped/ICP9/breakout/ELSA/F03/TOT3/JKB2s/X07a/AVNjp1/bxds"
+    ns2 = nav.NavState()
+    sdelay = StreamDelayer()
+    with open(infile, "rb") as fin:
+        try:
+            for ns2 in nav_jvd.greis_nav_gen(fin, utcoffset, weekoffset):
+                # Delay until appropriate time to issue message
+                dtobj = ns2.datetime()
+                if dtobj.year == 1980:
+                    continue
+                sdelay.update(msgtime=dtobj, delay=True)
                 print(ns2.nav_message().strip())
                 ns.update(ns2)
 
@@ -132,31 +177,38 @@ def nmea_serial_handler(ns, serialport_name, *args):
 
 
 def main():
+    handlers = {
+        'nmea': nmea_serial_handler,
+        'nvt': nvt_serial_handler,
+        'jvd': jvd_serial_handler,
+        'sim': simulator_handler,
+        'nmeasim': nmea_stdin_handler,
+        'nvtsim': nvt_sim_handler,
+        'jvdsim': jvd_sim_handler,
+    }
+
+
     parser = argparse.ArgumentParser(description="Serial-to-TCP server for GNSS receivers")
 
     parser.add_argument('-s', '--serial', default="/dev/ttyUSB0",
                         help="Input serial port")
-    parser.add_argument('--format', default='nmea', choices=('nmea', 'nvt', 'jvd'),
+    parser.add_argument('--format', default='nmea', choices=list(handlers.keys()),
                         help="Serial input data format (default: nmea)")
     # HOST = "127.0.0.1"  # Standard loopback interface address (localhost)
     # PORT = 4040  # Port to listen on (non-privileged ports are > 1023)
     parser.add_argument('--host', default="localhost", help="TCP server listen hostname")
     parser.add_argument('--port', default=4040, type=int, help="TCP server listen port")
     parser.add_argument('--interval', default=1.0, type=float, help="Output position update interval (seconds)")
+
+    parser.add_argument('--gpsutcoffset', default=18., type=float, help="Default GPS-UTC offset in seconds")
+    parser.add_argument('--gpsweekoffset', default=1024, type=int, help="GPS week offset (GPS WRNO, for Javad input only)")
     # parser.add_argument('-v','--verbose', action="store_true", help="Display verbose output")
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO, stream=sys.stdout)
 
-    handlers = {
-        'nmea': nmea_serial_handler,
-        'nvt': nvt_sim_handler, #nvt_serial_handler,
-        'jvd': None,
-         # or simulator_handler, nmea_stdin_handler
-    }
-
     ns = nav.NavState()
-    t_serial = threading.Thread(target=handlers[args.format], args=(ns, args.serial))
+    t_serial = threading.Thread(target=handlers[args.format], args=(ns, args.serial, args.gpsutcoffset, args.gpsweekoffset))
     t_serial.start()
     server(ns, args.host, args.port, args.interval)
 
