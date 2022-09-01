@@ -57,6 +57,16 @@ speed over ground, and vertical speed.
 
 
 
+## Recommended Messages
+
+For NMEA input, GGA, RMC, and ZDA message are recommended.
+
+For NOVATEL input, messages that provide position and velocity are recommended.
+The following combinations would work:
+
+- (BESTPOS or BESTGPSPOS) and (BESTVEL or BESTGPSVEL)
+- INSPVA or INSPVAS
+
 
 # References
 

@@ -1,6 +1,6 @@
 from dataclasses import dataclass
-
 import threading
+import datetime
 
 @dataclass
 class NavState:
@@ -54,3 +54,10 @@ class NavState:
         finally:
             self.lock_.release()
 
+    def datetime(self):
+        """ Return current UTC time as a time object """
+        sec = self.utc_ms // 1000
+        ms = self.utc_ms  % 1000
+        dtobj = datetime.datetime(self.utc_year, self.utc_month, self.utc_day,
+                                  self.utc_hour, self.utc_min, sec, ms * 1000)
+        return dtobj
