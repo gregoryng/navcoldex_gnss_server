@@ -5,9 +5,8 @@ Example GNSS server for NavCOLDEX navigation GUI written by John Sonntag
 `server.py` reads serial input from a GNSS receiver and creates
 a TCP server that the `navcoldex` Qt GUI can receive input from.
 
-This utility currently only supports NMEA input, but support for Novatel
-binary format messages and Javad/Topcon TPS/JPS format binary messages
-are also planned.
+This utility  supports NMEA input, Novatel binary format messages
+and Javad/Topcon TPS/JPS format binary messages.
 
 See below for recommended messages for each input format.
 
