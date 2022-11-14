@@ -29,7 +29,7 @@ In its simplest form, simply run:
 ```
 
 You can also specify the input serial port and the TCP port and hostname to listen on,
-and update interval, if needed:
+and interval (in seconds) of messages sent from server to client, if needed:
 
 ```
 ./server.py --serial /dev/ttyUSB0 --host 192.168.1.54 --port 4040 --interval 0.5
