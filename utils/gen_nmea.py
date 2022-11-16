@@ -15,6 +15,12 @@ from nmeasim.models import GpsReceiver
 
 
 def main():
+    parser = argparse.ArgumentParser(description="Generate simulated NMEA data")
+
+    parser.add_argument('--time', type=float, default=None,
+                        help="Time limit to run")
+    args = parser.parse_args()
+
     gps = GpsReceiver(
         date_time=datetime(2022,1, 1, 12, 34, 56, tzinfo=timezone.utc),
         lat=-77.0,
@@ -25,10 +31,14 @@ def main():
 
     sim = Simulator(gps=gps)
     sim.serve(output=sys.stdout, blocking=False)
-    t0 = time.time() + 10
+
+    # Run until time limit
+    tf = args.time
+    if args.time is not None:
+        tf += time.time()
 
     try:
-        while True: # time.time() < t0:
+        while tf is None or time.time() < tf:
             sys.stdout.flush()
             time.sleep(0.1)
     finally:
