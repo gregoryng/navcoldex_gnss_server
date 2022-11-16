@@ -173,6 +173,10 @@ def nmea_serial_handler(ns, serialport_name, *args):
             continue
         except KeyboardInterrupt:
             break
+        except Exception as e:
+            logging.warning('Unhandled exception: %r', e)
+            time.sleep(0.1) # prevent lockup
+
     logging.info("nmea_serial_handler stopped.")
 
 

@@ -28,13 +28,13 @@ class NmeaNavState(nav.NavState):
     def update_nmea(self, line, check=False):
         """ Update the navigation state from a nmea message """
         msg = pynmea2.parse(line, check=check)
-        msgtype = type(msg).__name__
         # we need time, lat, lon, alt, ground track, h speed and v speed
         # use duck typing to figure out nav state
         # Interested in GGA GLL RMC VTG (probably not GSA GSV ZDA
         # GLL has timestamp, lat lon (but no alt)
         # VTG has true track, speed over ground
         # So there is no message that has vertical speed
+        msgtype = type(msg).__name__
         if msgtype in ('GGA', 'RMC', 'ZDA'):
             method = getattr(self, 'update_' + msgtype)
             method(msg)
@@ -85,7 +85,11 @@ def main():
     mynav = NmeaNavState()
 
     for line in sys.stdin:
-        msg = pynmea2.parse(line)
+        try:
+            msg = pynmea2.parse(line)
+        except pynmea2.nmea.ParseError:
+            # Perhaps log a warning?
+            continue
         print(type(msg), "---", type(msg).__name__)
         mynav.update_nmea(line)
         print("       ", mynav.nav_message())

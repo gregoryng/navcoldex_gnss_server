@@ -25,3 +25,13 @@ $COV run -a ../possim.py > /dev/null
 $COV run -a ../utils/gen_nmea.py --time 5. > $DATADIR/nmea.txt
 # Parse it
 cat $DATADIR/nmea.txt | $COV run -a  ../nav_nmea.py > $DATADIR/parsed.txt
+
+
+# Cause a parse error with a partial packet (like might happen on startup)
+tail -c +9 $DATADIR/nmea.txt > $DATADIR/partial_nmea.txt
+cat $DATADIR/partial_nmea.txt | $COV run -a ../nav_nmea.py > $DATADIR/parsed_partial.txt
+
+# TODO: add simulator
+# $COV run -a ../utils/server.py --format nmeasim
+# $COV run -a ../utils/server.py --format nvtsim
+# $COV run -a ../utils/server.py --format jvdsim
