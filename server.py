@@ -195,9 +195,9 @@ def main():
     parser.add_argument('--format', default='nmea', choices=list(handlers.keys()),
                         help="Serial input data format (default: nmea)")
     # HOST = "127.0.0.1"  # Standard loopback interface address (localhost)
-    # PORT = 4040  # Port to listen on (non-privileged ports are > 1023)
+    # PORT = 4063  # Port to listen on (non-privileged ports are > 1023)
     parser.add_argument('--host', default="localhost", help="TCP server listen hostname")
-    parser.add_argument('--port', default=4040, type=int, help="TCP server listen port")
+    parser.add_argument('--port', default=4063, type=int, help="TCP server listen port")
     parser.add_argument('--interval', default=1.0, type=float, help="Output position update interval (seconds)")
 
     parser.add_argument('--gpsutcoffset', default=18., type=float, help="Default GPS-UTC offset in seconds")
