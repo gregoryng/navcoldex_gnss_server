@@ -7,8 +7,10 @@ TODO: convert GPS time to UTC time
 
 import time
 import sys
+import os
 from collections import defaultdict
 import math
+import logging
 
 import bognss.NVT.nvt as nvt
 import nav
@@ -38,19 +40,23 @@ def nvt_nav_gen(stream, gps_utc_offset, nmax=None):
             continue
 
         data = {}
+
+        if rec.parsed is None:
+            logging.debug("Unparseable novatel message")
+            continue # if it didn't parse right, skip it
         if rec.header.msgid == 263: # INSATT
-            data = parse_time(rec.parsed.gnssweek, rec.parsed.gnsssec, gps_utc_offset)
+            data = utc_time(rec.parsed.gnssweek, rec.parsed.gnsssec, gps_utc_offset)
         elif rec.header.msgid in (42, 423): # BESTPOS, BESTGPSPOS
-            data = parse_time(rec.parsed)
+            data = utc_time(rec.parsed.gnssweek, rec.parsed.gnsssec, gps_utc_offset)
             for k1, k2 in (('lat', 'latitude'), ('lon', 'longitude'), ('hgt', 'height')):
                 data[k2] = getattr(rec.parsed, k1)
         elif rec.header.msgid in (99, 506): # BESTVEL, BESTGPSVEL
-            data = parse_time(rec.parsed.gnssweek, rec.parsed.gnsssec, gps_utc_offset)
+            data = utc_time(rec.parsed.gnssweek, rec.parsed.gnsssec, gps_utc_offset)
             # vel_type latency age hor_spd trk_gnd vert_spd resvd1 crc
             for k1 in 'hor_spd trk_gnd vert_spd'.split():
                 data[k1] = getattr(rec.parsed, k1)
         elif rec.header.msgid in (507, 508): # INSPVA, INSPVAS
-            data = parse_time(rec.parsed.gnssweek, rec.parsed.gnsssec, gps_utc_offset)
+            data = utc_time(rec.parsed.gnssweek, rec.parsed.gnsssec, gps_utc_offset)
             for k1, k2 in (('lat', 'latitude'), ('lon', 'longitude'), ('hgt', 'height'),
                 ('vu', 'vert_spd') ):
                 data[k2] = getattr(rec.parsed, k1)
@@ -84,10 +90,13 @@ def utc_time(gnssweek, gnsssec, gps_utc_offset_sec=0.):
 
 def main():
     infile = "/disk/kea/WAIS/orig/xped/ICP9/acqn/NVT/F01/SPAN_1.LOG"
-    infile = "/disk/kea/WAIS/targ/xped/ICP9/breakout/ELSA/F03/TOT3/JKB2s/X07a/AVNnp1/bxds"
+    #infile = "/disk/kea/WAIS/targ/xped/ICP9/breakout/ELSA/F03/TOT3/JKB2s/X07a/AVNnp1/bxds"
+    # A sample from the above file
+    infile = os.path.join(os.path.dirname(__file__), 'tests/data/ICP9_03_TOT3_JKB2s_X07a_AVNnp1_bxds')
+
 
     with open(infile, "rb") as fin:
-        for mynav in nvt_nav_gen(fin, nmax=1000):
+        for mynav in nvt_nav_gen(fin, gps_utc_offset=18, nmax=1000):
             print(mynav.nav_message().strip())
 
 

@@ -7,3 +7,5 @@ pymap3d
 # for nmea simulator only
 nmeasim
 geographiclib
+
+coverage

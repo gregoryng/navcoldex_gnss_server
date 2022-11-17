@@ -8,6 +8,7 @@ import time
 import sys
 from collections import defaultdict
 import math
+import os
 
 import bognss.JVD.greis as greis
 from nav_nvt import sec_from_weeksec, gm_from_gps, utc_time
@@ -68,7 +69,8 @@ def greis_nav_gen(stream, gps_utc_offset=0, gps_weeknum_offset=1024, nmax=None):
 
 
 def main():
-    infile = "/disk/kea/WAIS/targ/xped/ICP9/breakout/ELSA/F03/TOT3/JKB2s/X07a/AVNjp1/bxds"
+    #infile = "/disk/kea/WAIS/targ/xped/ICP9/breakout/ELSA/F03/TOT3/JKB2s/X07a/AVNjp1/bxds"
+    infile = os.path.join(os.path.dirname(__file__), 'tests/data/ICP9_03_TOT3_JKB2s_X07a_AVNjp1_bxds')
 
     with open(infile, "rb") as fin:
         for mynav in greis_nav_gen(fin, nmax=1000):
