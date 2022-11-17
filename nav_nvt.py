@@ -92,7 +92,7 @@ def main():
     infile = "/disk/kea/WAIS/orig/xped/ICP9/acqn/NVT/F01/SPAN_1.LOG"
     #infile = "/disk/kea/WAIS/targ/xped/ICP9/breakout/ELSA/F03/TOT3/JKB2s/X07a/AVNnp1/bxds"
     # A sample from the above file
-    infile = os.path.join(os.path.dirname(__file__), 'tests/data/ICP9_03_TOT3_JKB2s_X07a_AVNnp1_bxds')
+    infile = os.path.join(os.path.dirname(__file__), 'tests/data/ICP9_F03_TOT3_JKB2s_X07a_AVNnp1_bxds')
 
 
     with open(infile, "rb") as fin:

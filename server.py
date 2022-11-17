@@ -7,6 +7,7 @@ This can be modified to read current state from another source such as GPSD or
 a serial input """
 
 import sys
+import os
 import logging
 import argparse
 import socket
@@ -116,10 +117,14 @@ def jvd_serial_handler(ns, serialport_name, utcoffset, gpsweekoffset, *args):
 
 
 def nvt_sim_handler(ns, _, utcoffset, *args):
+    tf = None
     infile = "/disk/kea/WAIS/targ/xped/ICP9/breakout/ELSA/F03/TOT3/JKB2s/X07a/AVNnp1/bxds"
+    if not os.path.exists(infile):
+        infile = os.path.join(os.path.dirname(__file__), 'tests/data/ICP9_F03_TOT3_JKB2s_X07a_AVNnp1_bxds')
+        tf = time.time() + 10. # timeout
+
     ns2 = nav.NavState()
     sdelay = StreamDelayer()
-    t0 = None
     with open(infile, "rb") as fin:
         try:
             for ns2 in nav_nvt.nvt_nav_gen(fin, utcoffset):
@@ -128,11 +133,19 @@ def nvt_sim_handler(ns, _, utcoffset, *args):
                 print(ns2.nav_message().strip())
                 ns.update(ns2)
 
+                if tf is not None and time.time() > tf:
+                    break
+
         except KeyboardInterrupt:
             pass
 
 def jvd_sim_handler(ns, _, utcoffset, weekoffset, *args):
+    tf = None
     infile = "/disk/kea/WAIS/targ/xped/ICP9/breakout/ELSA/F03/TOT3/JKB2s/X07a/AVNjp1/bxds"
+    if not os.path.exists(infile):
+        infile = os.path.join(os.path.dirname(__file__), 'tests/data/ICP9_F03_TOT3_JKB2s_X07a_AVNjp1_bxds')
+        tf = time.time() + 10.
+
     ns2 = nav.NavState()
     sdelay = StreamDelayer()
     with open(infile, "rb") as fin:
@@ -145,6 +158,8 @@ def jvd_sim_handler(ns, _, utcoffset, weekoffset, *args):
                 sdelay.update(msgtime=dtobj, delay=True)
                 print(ns2.nav_message().strip())
                 ns.update(ns2)
+                if tf is not None and time.time() > tf:
+                    break
 
         except KeyboardInterrupt:
             pass

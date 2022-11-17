@@ -19,6 +19,10 @@ do
 done
 
 
+$COV run -a ../bognss/NVT/nvt.py -i data/ICP9_F03_TOT3_JKB2s_X07a_AVNnp1_bxds > /dev/null
+$COV run -a ../bognss/JVD/greis.py -i data/ICP9_F03_TOT3_JKB2s_X07a_AVNnp1_bxds > /dev/null
+
+
 $COV run -a ../possim.py > /dev/null
 
 # Generate some NMEA
