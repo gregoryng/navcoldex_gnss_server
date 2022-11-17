@@ -29,13 +29,26 @@ $COV run -a ../possim.py > /dev/null
 $COV run -a ../utils/gen_nmea.py --time 5. > $DATADIR/nmea.txt
 # Parse it
 cat $DATADIR/nmea.txt | $COV run -a  ../nav_nmea.py > $DATADIR/parsed.txt
+cat $DATADIR/nmea.txt | $COV run -a  ../server.py --format nmeasim --timeout 3 > $DATADIR/parsed_nmea.txt
+$COV run -a ../server.py --format sim --timeout 3
+$COV run -a  ../server.py --format jvdsim --timeout 3 > $DATADIR/parsed_jvd.txt
+$COV run -a  ../server.py --format nvtsim --timeout 3 > $DATADIR/parsed_nvt.txt
 
 
 # Cause a parse error with a partial packet (like might happen on startup)
 tail -c +9 $DATADIR/nmea.txt > $DATADIR/partial_nmea.txt
 cat $DATADIR/partial_nmea.txt | $COV run -a ../nav_nmea.py > $DATADIR/parsed_partial.txt
 
-# TODO: add simulator
-# $COV run -a ../utils/server.py --format nmeasim
-# $COV run -a ../utils/server.py --format nvtsim
-# $COV run -a ../utils/server.py --format jvdsim
+
+# Run the server and initiate a connection
+$COV run -a ../server.py --format nvtsim --timeout 10 > $DATADIR/nvtsim_conn.txt &
+PID="$!"
+sleep 1
+nc localhost 4063 &
+# Have netcat wait for up to 2 seconds for a the connection to succeed, then
+# run for up to 5 seconds before quitting, so that we break the connection
+# and run the code that recycles the connection
+#timeout 5s nc -w 2 localhost 4063
+#timeout 5s nc -w 2 localhost 4063 &
+wait $PID
+echo "$COV report -m"

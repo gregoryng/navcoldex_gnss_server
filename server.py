@@ -25,20 +25,30 @@ import nav_nmea
 import nav_nvt
 import nav_jvd
 
-def server(ns, host, port, interval=1.0):
+def server(ns, host, port, interval=1.0, timeout=None):
     """ interval - Message output interval
 
     This routine currently only accepts one connection at a time,
     but we could easily make it accept multiple connections
+
+    timeout specifies the number of seconds to run the server before
+    quitting.
     """
 
+    t0 = time.time()
     do_listen = True
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         logging.info("Listening on %s:%d", host, port)
         s.bind((host, port))
         while do_listen:
-            s.listen()
-            conn, addr = s.accept()
+            try:
+                if timeout is not None and time.time() - t0 > timeout:
+                    break #do_listen = False
+                s.settimeout(2) # listen briefly
+                s.listen()
+                conn, addr = s.accept()
+            except socket.timeout:
+                continue
             with conn:
                 logging.info(f"Connected by {addr}")
                 try:
@@ -46,11 +56,13 @@ def server(ns, host, port, interval=1.0):
                         data = ns.nav_message()
                         conn.sendall(data.encode('UTF-8'))
                         time.sleep(interval)
+                        if timeout is not None and time.time() - t0 > timeout:
+                            do_listen = False
+                            break
                     do_listen = False
                 except BrokenPipeError:
                     logging.info("Client disconnected. Waiting for connection")
                     do_listen = True
-
 
 class StreamDelayer:
     """ When reading messages from a stream, delay them until appropriate time
@@ -75,12 +87,18 @@ class StreamDelayer:
 
 def simulator_handler(ns, *args):
     """ Placeholder for serial handler thread, just simulates movement """
+
+    _, _, _, timeout = args
+    t0 = time.time()
+
     psim = possim.PosSimulator()
     while True:
         time.sleep(0.2)
         psim.move(0.2)
         ns1 = psim.navstate()
         ns.update(ns1)
+        if timeout is not None and time.time() - t0 > timeout:
+            break
 
 def nmea_stdin_handler(ns, *args):
     """ To use this one with a simulator, run:
@@ -91,78 +109,81 @@ def nmea_stdin_handler(ns, *args):
         ns2.update_nmea(line)
         ns.update(ns2)
 
-def nvt_serial_handler(ns, serialport_name, utcoffset, *args):
-    ns = nav.NavState()
-    ser = serial.Serial(serialport_name, 38400, timeout=1.)
-    #sio = io.TextIOWrapper(io.BufferedRWPair(ser, ser))
-    for ns2 in nav_nvt.nvt_nav_gen(ser, utcoffset):
-        try:
-            ns.update(ns2)
-        except KeyboardInterrupt:
-            break
 
-def jvd_serial_handler(ns, serialport_name, utcoffset, gpsweekoffset, *args):
-    ns = nav.NavState()
+def nvt_serial_handler(ns, serialport_name, utcoffset, *args):
     ser = serial.Serial(serialport_name, 38400, timeout=1.)
-    #sio = io.TextIOWrapper(io.BufferedRWPair(ser, ser))
-    for ns2 in nav_jvd.greis_nav_gen(ser, utcoffset, gpsweekoffset):
-        try:
-            dtobj = ns2.datetime()
-            if dtobj.year == 1980:
+    navgen = nav_nvt.nvt_nav_gen(ser, utcoffset)
+    nvt_handler(ns, navgen, timeout)
+
+def nvt_handler(ns, navgen, timeout):
+    # Even though we don't need the 1980 check,
+    # the javad handler is close enough.
+    jvd_handler(ns, navgen, timeout)
+
+def jvd_handler(ns, navgen, timeout):
+    t0 = time.time()
+    try:
+        for ns2 in navgen:
+            if ns2.datetime().year == 1980:
                 continue
             ns.update(ns2)
-        except KeyboardInterrupt:
-            break
+            if timeout is not None and time.time() - t0 > timeout:
+                break
+    except KeyboardInterrupt:
+        pass
 
+
+def jvd_serial_handler(ns, serialport_name, utcoffset, gpsweekoffset, *args):
+    ser = serial.Serial(serialport_name, 38400, timeout=1.)
+    navgen = nav_jvd.greis_nav_gen(ser, utcoffset, gpsweekoffset)
+    jvd_handler(ns, navgen)
+
+
+def nvt_sim_generator(infile, utcoffset, timeout):
+    """ Reads novatel messages, converts them to nav messages, and
+    delays them to an appropriate time """
+    sdelay = StreamDelayer()
+    with open(infile, "rb") as fin:
+        for ns2 in nav_nvt.nvt_nav_gen(fin, utcoffset):
+            # Delay until appropriate time to issue message
+            dtobj = ns2.datetime()
+            sdelay.update(msgtime=dtobj, delay=True)
+            logging.info(ns2.nav_message().strip())
+            yield ns2
 
 
 def nvt_sim_handler(ns, _, utcoffset, *args):
-    tf = None
-    infile = "/disk/kea/WAIS/targ/xped/ICP9/breakout/ELSA/F03/TOT3/JKB2s/X07a/AVNnp1/bxds"
-    if not os.path.exists(infile):
-        infile = os.path.join(os.path.dirname(__file__), 'tests/data/ICP9_F03_TOT3_JKB2s_X07a_AVNnp1_bxds')
-        tf = time.time() + 10. # timeout
+    _, timeout = args
+    t0 = time.time()
+    #infile = "/disk/kea/WAIS/targ/xped/ICP9/breakout/ELSA/F03/TOT3/JKB2s/X07a/AVNnp1/bxds"
+    #if not os.path.exists(infile):
+    logging.info("nvt sim handler")
+    infile = os.path.join(os.path.dirname(__file__), 'tests/data/ICP9_F03_TOT3_JKB2s_X07a_AVNnp1_bxds')
+    navgen = nvt_sim_generator(infile, utcoffset, timeout)
+    nvt_handler(ns, navgen, timeout)
 
-    ns2 = nav.NavState()
+def jvd_sim_generator(infile, utcoffset, weekoffset):
+    """ Generates jvd messages delayed to the appropriate time """
     sdelay = StreamDelayer()
     with open(infile, "rb") as fin:
-        try:
-            for ns2 in nav_nvt.nvt_nav_gen(fin, utcoffset):
-                # Delay until appropriate time to issue message
-                sdelay.update(msgtime=ns2.datetime())
-                print(ns2.nav_message().strip())
-                ns.update(ns2)
+        for ns2 in nav_jvd.greis_nav_gen(fin, utcoffset, weekoffset):
+            # Delay until appropriate time to issue message
+            dtobj = ns2.datetime()
+            if dtobj.year == 1980:
+                continue
+            sdelay.update(msgtime=dtobj, delay=True)
+            logging.info(ns2.nav_message().strip())
+            yield ns2
 
-                if tf is not None and time.time() > tf:
-                    break
-
-        except KeyboardInterrupt:
-            pass
 
 def jvd_sim_handler(ns, _, utcoffset, weekoffset, *args):
-    tf = None
-    infile = "/disk/kea/WAIS/targ/xped/ICP9/breakout/ELSA/F03/TOT3/JKB2s/X07a/AVNjp1/bxds"
-    if not os.path.exists(infile):
-        infile = os.path.join(os.path.dirname(__file__), 'tests/data/ICP9_F03_TOT3_JKB2s_X07a_AVNjp1_bxds')
-        tf = time.time() + 10.
-
-    ns2 = nav.NavState()
-    sdelay = StreamDelayer()
-    with open(infile, "rb") as fin:
-        try:
-            for ns2 in nav_jvd.greis_nav_gen(fin, utcoffset, weekoffset):
-                # Delay until appropriate time to issue message
-                dtobj = ns2.datetime()
-                if dtobj.year == 1980:
-                    continue
-                sdelay.update(msgtime=dtobj, delay=True)
-                print(ns2.nav_message().strip())
-                ns.update(ns2)
-                if tf is not None and time.time() > tf:
-                    break
-
-        except KeyboardInterrupt:
-            pass
+    (timeout,) = args
+    t0 = time.time()
+    #infile = "/disk/kea/WAIS/targ/xped/ICP9/breakout/ELSA/F03/TOT3/JKB2s/X07a/AVNjp1/bxds"
+    #if not os.path.exists(infile):
+    infile = os.path.join(os.path.dirname(__file__), 'tests/data/ICP9_F03_TOT3_JKB2s_X07a_AVNjp1_bxds')
+    navgen = jvd_sim_generator(infile, utcoffset, weekoffset)
+    jvd_handler(ns, navgen, timeout)
 
 
 def nmea_serial_handler(ns, serialport_name, *args):
@@ -190,7 +211,7 @@ def nmea_serial_handler(ns, serialport_name, *args):
             break
         except Exception as e:
             logging.warning('Unhandled exception: %r', e)
-            time.sleep(0.1) # prevent lockup
+            time.sleep(0.1) # prevent lockup and continue
 
     logging.info("nmea_serial_handler stopped.")
 
@@ -220,17 +241,17 @@ def main():
     parser.add_argument('--interval', default=1.0, type=float, help="Output position update interval (seconds)")
 
     parser.add_argument('--gpsutcoffset', default=18., type=float, help="Default GPS-UTC offset in seconds")
-    parser.add_argument('--gpsweekoffset', default=1024, type=int, help="GPS week offset (GPS WRNO, for Javad input only)")
+    parser.add_argument('--gpsweekoffset', default=1024, type=int, help="GPS week offset (GPS WNRO, for Javad input only)")
+    parser.add_argument('--timeout', default=None, type=float, help="Time to run server before quitting")
     # parser.add_argument('-v','--verbose', action="store_true", help="Display verbose output")
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO, stream=sys.stdout)
 
     ns = nav.NavState()
-    t_serial = threading.Thread(target=handlers[args.format], args=(ns, args.serial, args.gpsutcoffset, args.gpsweekoffset))
+    t_serial = threading.Thread(target=handlers[args.format], args=(ns, args.serial, args.gpsutcoffset, args.gpsweekoffset, args.timeout))
     t_serial.start()
-    server(ns, args.host, args.port, args.interval)
-
+    server(ns, args.host, args.port, args.interval, timeout=args.timeout)
 
 if __name__ == "__main__":
     main()
