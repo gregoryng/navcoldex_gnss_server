@@ -20,7 +20,14 @@ done
 
 
 $COV run -a ../bognss/NVT/nvt.py -i data/ICP9_F03_TOT3_JKB2s_X07a_AVNnp1_bxds > /dev/null
-$COV run -a ../bognss/JVD/greis.py -i data/ICP9_F03_TOT3_JKB2s_X07a_AVNnp1_bxds > /dev/null
+$COV run -a ../bognss/NVT/nvt.py -i data/ICP9_F03_TOT3_JKB2s_X07a_AVNnp1_bxds --limit 20 --crc > /dev/null
+$COV run -a ../bognss/NVT/nvt.py -i data/KRT2_F21_NIS2_IBH0g_X23a_AVNnp4_bxds --crc > /dev/null
+$COV run -a ../bognss/NVT/nvt.py -i data/KRT2_F21_NIS2_IBH0g_X23a_AVNnp4_bxds -o $DATADIR > /dev/null
+
+tail -c 50k data/ICP9_F03_TOT3_JKB2s_X07a_AVNjp1_bxds | head -c 40k > $DATADIR/jps
+$COV run -a ../bognss/JVD/greis.py -i data/ICP9_F03_TOT3_JKB2s_X07a_AVNjp1_bxds -v > /dev/null
+$COV run -a ../bognss/JVD/greis.py -i data/ICP9_F03_TOT3_JKB2s_X07a_AVNjp1_bxds --nmax 100 > /dev/null
+$COV run -a ../bognss/JVD/greis.py -i $DATADIR/jps > /dev/null
 
 
 $COV run -a ../possim.py > /dev/null
